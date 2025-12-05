@@ -105,12 +105,8 @@ st.title("Project Echo: The Second Brain")
 st.caption("Violet builds the logic. Storm finds the strategy. Upload docs to begin.")
 
 # File Ingestion
-uploaded_files = st.file_uploader("Upload Knowledge Base", type=["pdf", "txt"], accept_multiple_
-                    if extracted: text += extracted + "\n"
-            else:
-                text += io.StringIO(file.getvalue().decode("utf-8")).read()
-        except Exception as e: st.error(f"Error: {e}")
-    return text
+uploaded_files = st.file_uploader("Upload Knowledge Base", type=["pdf", "txt"], accept_multiple_files=True)
+
 
 # 2. THE PERSONAS (The "Outside the Box" Logic)
 VIOLET_SYSTEM_PROMPT = """
