@@ -4,7 +4,7 @@ import PyPDF2
 import io
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Grok Research Agent", page_icon="🕵️‍♂️", layout="wide")
+st.set_page_config(page_title="Project Echo", page_icon="📡", layout="wide")
 
 # Custom CSS for a "Pro" look
 st.markdown("""
@@ -17,19 +17,19 @@ st.markdown("""
 
 # --- SIDEBAR CONFIG ---
 with st.sidebar:
-    st.title("🤖 Agent Controls")
+    st.title("📡 Project Echo")
     
-    # API Key Input
+    # API Key Handling
     if "GROQ_API_KEY" in st.secrets:
         api_key = st.secrets["GROQ_API_KEY"]
-        st.success("🔑 API Key Loaded")
+        st.success("Key Loaded from Secrets")
     else:
         api_key = st.text_input("Enter Groq API Key", type="password")
         if not api_key:
-            st.warning("⚠️ Key Required to Run")
+            st.warning("⚠️ Key Required")
 
     st.markdown("---")
-    st.info("Engine: Llama 3.3 70B (via Groq)\nStatus: Online")
+    st.info("System: Llama 3.3 70B\nStatus: Online")
 
 # --- MAIN INTERFACE ---
 st.title("📂 Document Intelligence")
@@ -44,8 +44,11 @@ def get_context(files):
         try:
             if file.type == "application/pdf":
                 pdf = PyPDF2.PdfReader(file)
-                for page in pdf.pages: text += page.extract_text() + "\n"
+                for page in pdf.pages: 
+                    extracted = page.extract_text()
+                    if extracted: text += extracted + "\n"
             else:
+                # Handle text files
                 text += io.StringIO(file.getvalue().decode("utf-8")).read()
         except Exception as e: 
             st.error(f"Error reading file: {e}")
@@ -63,16 +66,14 @@ for msg in st.session_state.messages:
 # 4. CHAT LOGIC
 if prompt := st.chat_input("Query your documents..."):
     
-    # Validation
     if not api_key: st.stop()
     
+    # Process files if they exist
     context_data = ""
     if uploaded_files: 
-        with st.spinner("Analyzing documents..."):
-            context_data = get_context(uploaded_files)
+        context_data = get_context(uploaded_files)
     else:
-        st.toast("⚠️ No documents! I'm answering from general knowledge.")
-        context_data = "No specific documents provided."
+        context_data = "No documents provided."
 
     # User Input
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -84,17 +85,16 @@ if prompt := st.chat_input("Query your documents..."):
         full_response = ""
         
         try:
-            # --- THE FIX: Use native Groq client (No OpenAI import needed) ---
+            # Initialize Groq Client
             client = Groq(api_key=api_key)
             
-            # The "Lazy RAG" Prompt
+            # The Prompt
             system_prompt = f"""
             You are an expert Research Analyst.
             Use the following CONTEXT to answer the user.
-            If the answer isn't in the context, use your general knowledge but mention it.
             
             === CONTEXT START ===
-            {context_data[:100000]} 
+            {context_data[:50000]} 
             === CONTEXT END ===
             """
 
@@ -107,6 +107,7 @@ if prompt := st.chat_input("Query your documents..."):
                 stream=True
             )
             
+            # Stream the response
             for chunk in stream:
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
