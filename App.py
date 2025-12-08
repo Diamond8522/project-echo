@@ -4,16 +4,14 @@ import PyPDF2
 import io
 from concurrent.futures import ThreadPoolExecutor
 
-# --- 1. THE BRAINS (Defined in the Penthouse!) ---
+# --- 1. THE BRAINS (Defined at the top to prevent NameErrors) ---
 
 def generate_blueprint(history, api_key):
     """Compiles the chat into a strategy document."""
     conversation = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
-    
     prompt = f"""
     Analyze this conversation history between the User and the active Agents.
-    Create a structured "Project Blueprint" based on it.
-    
+    Create a structured "Project Blueprint" report.
     Format exactly:
     # 🚀 PROJECT ECHO: STRATEGY REPORT
     ## 🛠 PLAN/FACT AUDIT
@@ -21,7 +19,6 @@ def generate_blueprint(history, api_key):
     === CHAT LOG ===
     {conversation}
     """
-    
     try:
         client = Groq(api_key=api_key)
         completion = client.chat.completions.create(
@@ -34,13 +31,13 @@ def generate_blueprint(history, api_key):
         return f"Error generating blueprint: {e}"
 
 def get_context(files):
-    """Reads uploaded PDF or TXT files with improved error feedback."""
+    """Reads uploaded PDF or TXT files specifically for discovery logic."""
     text = ""
     for file in files:
         try:
             if file.type == "application/pdf":
                 pdf = PyPDF2.PdfReader(file)
-                # Check for 22 pages specifically as per user input
+                # Iterates through all 22+ pages for extraction
                 for page in pdf.pages: 
                     extracted = page.extract_text()
                     if extracted:
@@ -52,7 +49,7 @@ def get_context(files):
     return text
 
 # --- 2. CONFIGURATION & UI ---
-st.set_page_config(page_title="Project Echo", page_icon="📡", layout="wide")
+st.set_page_config(page_title="Project Echo: Discovery", page_icon="⚖️", layout="wide")
 
 st.markdown("""
 <style>
@@ -62,7 +59,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. SIDEBAR CONTROLS ---
+# --- 3. SIDEBAR ---
 with st.sidebar:
     st.title("📡 Project Echo")
     
@@ -74,58 +71,53 @@ with st.sidebar:
         if not api_key: st.warning("⚠️ Key Required")
 
     st.markdown("---")
-    # NEW: Toggle to run LEX ONLY
-    exclusive_lex = st.toggle("Activate EXCLUSIVE LEX Mode", help="Toggling this hides Violet & Storm to focus strictly on Legal Discovery.")
-    case_type = st.selectbox("Document Type:", ["Exhibits", "Timeline", "Communication Logs", "Filings"])
+    # THE LEX TOGGLE: RUN EXCLUSIVE MODE
+    exclusive_lex = st.toggle("Activate EXCLUSIVE LEX Mode", help="Hides Violet & Storm to focus strictly on Discovery.")
+    case_type = st.selectbox("Document Type:", ["Exhibits", "Timeline", "Discovery Log"])
     
     st.markdown("---")
-    if api_key and st.button("Download Strategy Report"):
+    if api_key and st.button("Generate Strategy Report"):
         if "messages" in st.session_state and len(st.session_state.messages) > 1:
             blueprint_text = generate_blueprint(st.session_state.messages, api_key)
-            st.download_button(label="📥 Download .txt", data=blueprint_text, file_name="Project_Echo_Report.txt")
+            st.download_button(label="📥 Download .txt", data=blueprint_text, file_name="Project_Report.txt")
         else:
-            st.warning("Chat history required for export.")
+            st.warning("History required.")
 
 # --- 4. MAIN INTERFACE ---
-st.title("📂 Case Intelligence")
-st.caption("22-Page Document Analysis | Powered by Lex & Llama 3.3")
+st.title("📂 Case Intelligence Module")
+st.caption("Advanced Document Analysis | Engine: Llama 3.3 70B")
 
 # FILE INGESTION
-uploaded_files = st.file_uploader("Upload Case Documents", type=["pdf", "txt"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("Upload Case Knowledge Base (PDF/TXT)", type=["pdf", "txt"], accept_multiple_files=True)
 
-# PERSONA DEFINITIONS
-VIOLET_SYSTEM_PROMPT = "You are VIOLET, focusing on technical architecture and logic."
-STORM_SYSTEM_PROMPT = "You are STORM, providing radical strategy and intensity."
-LEX_SYSTEM_PROMPT = """
-You are LEX, the Research Auditor. 
-Role: Fact extraction and indexing for legal discovery.
-Task: Use the uploaded CONTEXT to build a table of facts, dates, and evidence. 
-Safety: DO NOT PROVIDE LEGAL ADVICE. Be clinical and objective.
-"""
+# Agent Definitions
+VIOLET_SYSTEM_PROMPT = "You are VIOLET, technical logic and architecture agent."
+STORM_SYSTEM_PROMPT = "You are STORM, radical strategy and intensity agent."
+LEX_SYSTEM_PROMPT = "You are LEX, Research Auditor. Extract facts, dates, and evidence clinicaly. DO NOT provide legal advice."
 
-# SESSION HISTORY
+# SESSION MEMORY
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Ready for discovery. Upload files to give Lex the facts."}]
+    st.session_state.messages = [{"role": "assistant", "content": "Exclusive LEX Mode ready. Upload your case files."}]
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-# EXECUTION LOOP
-if prompt := st.chat_input("Query Case Documents..."):
+# EXECUTION logic
+if prompt := st.chat_input("Input command for Project Echo..."):
     if not api_key: st.stop()
     
-    # Improved Context Capture
+    # Process files
     context_data = get_context(uploaded_files) if uploaded_files else ""
     
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
 
-    # Internal runner function
+    # The Internal Runner
     def run_agent(name, prompt_text, system_prompt, temp):
         try:
             client = Groq(api_key=api_key)
-            # Inject context directly into the System instruction
-            full_system = f"{system_prompt}\n\n[CONTEXT]:\n{context_data if context_data else 'NO FILES LOADED.'}"
+            # FORCE the Context into the brain
+            full_system = f"{system_prompt}\n\n[DOCUMENT CONTEXT]:\n{context_data if context_data else 'NO FILES LOADED.'}"
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": full_system}, {"role": "user", "content": prompt_text}],
@@ -135,20 +127,17 @@ if prompt := st.chat_input("Query Case Documents..."):
             return f"**{name}:** " + completion.choices[0].message.content
         except Exception as e: return f"🚨 {name} Error: {e}"
 
-    # THE PIVOT: Exclusive Logic
     with st.chat_message("assistant"):
         with ThreadPoolExecutor(max_workers=3) as executor:
-            if exclusive_lex:
-                # RUN ONLY LEX
+            if exclusive_lex: # EXCLUSIVE PIVOT
                 futures = [executor.submit(run_agent, "Lex", prompt, LEX_SYSTEM_PROMPT, 0.2)]
-            else:
-                # RUN THE ORIGINAL DUO
+            else: # STANDARD PIVOT
                 futures = [
                     executor.submit(run_agent, "Violet", prompt, VIOLET_SYSTEM_PROMPT, 0.6),
                     executor.submit(run_agent, "Storm", prompt, STORM_SYSTEM_PROMPT, 0.9)
                 ]
             
-            with st.spinner("Analyzing high-stakes context..."):
+            with st.spinner("Analyzing high-stakes exhibits..."):
                 results = [f.result() for f in futures]
         
         full_response = "\n\n---\n\n".join(results)
