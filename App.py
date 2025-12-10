@@ -220,3 +220,28 @@ if prompt := st.chat_input("Query Case Documents..."):
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": full_system}, {"role": "user", "content": prompt_text}],
+                temperature=temp,
+                stream=False
+            )
+            return f"**{name}:** " + completion.choices[0].message.content
+        except Exception as e: return f"🚨 {name} Error: {e}"
+
+    # THE PIVOT: Exclusive Logic
+    with st.chat_message("assistant"):
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            if exclusive_lex:
+                # RUN ONLY LEX (Low Temp for accuracy)
+                futures = [executor.submit(run_agent, "Lex", f"[AUDIT TYPE: {case_type}] {prompt}", LEX_SYSTEM_PROMPT, 0.2)]
+            else:
+                # RUN THE ORIGINAL DUO (Violet/Storm)
+                futures = [
+                    executor.submit(run_agent, "Violet", prompt, VIOLET_SYSTEM_PROMPT, 0.6),
+                    executor.submit(run_agent, "Storm", prompt, STORM_SYSTEM_PROMPT, 0.9)
+                ]
+            
+            with st.spinner("Synchronizing Agents..."):
+                results = [f.result() for f in futures]
+        
+        full_response = "\n\n---\n\n".join(results)
+        st.markdown(full_response)
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
